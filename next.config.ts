@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  /* config options here */
+  /* custom production server (server.mjs) serves the app + socket.io */
   typescript: {
     ignoreBuildErrors: true,
   },

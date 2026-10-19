@@ -20,18 +20,27 @@ export function connectSocket(user: AuthUser): Socket {
 
   if (socket) socket.disconnect()
 
-  socket = io("/?XTransformPort=3003", {
-    auth: {
-      token: localStorage.getItem("kanban_token"),
-      name: user.name,
-      avatarColor: user.avatarColor,
-    },
+  const auth = {
+    token: localStorage.getItem("kanban_token"),
+    name: user.name,
+    avatarColor: user.avatarColor,
+  }
+  const common = {
+    auth,
     transports: ["websocket", "polling"],
     reconnection: true,
     reconnectionAttempts: Infinity, // keep trying — we resync on reconnect
     reconnectionDelay: 1000,
     timeout: 10000,
-  })
+  }
+
+  if (process.env.NEXT_PUBLIC_SOCKET_URL) {
+    // Production (Render): same-origin custom server, socket.io at /socket.io
+    socket = io(process.env.NEXT_PUBLIC_SOCKET_URL, { ...common, path: "/socket.io" })
+  } else {
+    // Sandbox (Caddy gateway): forwards /?XTransformPort=3003 to the mini-service
+    socket = io("/?XTransformPort=3003", { ...common, path: "/" })
+  }
 
   return socket
 }
