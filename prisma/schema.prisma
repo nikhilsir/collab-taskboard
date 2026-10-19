@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER — authentication & profile
+// ============================================
+model User {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  password    String // bcrypt hashed
+  avatarColor String   @default("#6366f1") // avatar bubble color
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Boards owned by this user
+  ownedBoards  Board[]  @relation("BoardOwner")
+  // Boards where user is a member
+  memberBoards Board[]  @relation("BoardMembers")
+  // Tasks assigned to this user
+  assignedTasks Task[]  @relation("TaskAssignee")
+  // Comments written by this user
+  comments     Comment[]
+  // Activities performed
+  activities   Activity[]
+
+  @@index([email])
+}
+
+// ============================================
+// BOARD — kanban board container
+// ============================================
+model Board {
+  id          String   @id @default(cuid())
+  title       String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User   @relation("BoardOwner", fields: [createdById], references: [id], onDelete: Cascade)
+  members User[] @relation("BoardMembers") // implicit many-to-many
+  tasks   Task[]
+  activities Activity[]
+
+  @@index([createdById])
+}
+
+// ============================================
+// TASK — kanban card
+// status: TODO | IN_PROGRESS | REVIEW | DONE
+// priority: LOW | MEDIUM | HIGH | URGENT
+// position: Float — fractional indexing (1.5, 1.25...) so moving a card
+//           updates ONLY this row, not the whole column
+// version:  optimistic concurrency guard against race conditions
+// labels:   JSON string array (SQLite has no primitive lists)
+// ============================================
+model Task {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?
+  priority     String    @default("MEDIUM")
+  status       String    @default("TODO")
+  position     Float     @default(1000)
+  dueDate      DateTime?
+  labels       String    @default("[]") // JSON array e.g. '["bug","feature"]'
+  version      Int       @default(1)
+  boardId      String
+  assignedToId String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  board      Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  assignedTo User?    @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  comments   Comment[]
+
+  @@index([boardId, status, position])
+  @@index([assignedToId])
+  @@index([dueDate])
+}
+
+// ============================================
+// COMMENT — discussion inside a task (bonus feature)
+// ============================================
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  taskId    String
+  authorId  String
+  createdAt DateTime @default(now())
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+// ============================================
+// ACTIVITY — board timeline / audit log (bonus feature)
+// type: TASK_CREATED | TASK_MOVED | TASK_UPDATED | TASK_DELETED |
+//       MEMBER_JOINED | BOARD_CREATED | COMMENT_ADDED
+// ============================================
+model Activity {
+  id        String   @id @default(cuid())
+  type      String
+  message   String
+  boardId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, createdAt])
+}
