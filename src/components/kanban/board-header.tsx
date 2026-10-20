@@ -20,6 +20,7 @@ import {
   Search,
   UserPlus,
   Activity,
+  MessagesSquare,
   Moon,
   Sun,
   Wifi,
@@ -31,6 +32,7 @@ import { useKanbanStore } from "@/lib/store";
 import { AvatarStack, UserAvatar } from "./user-avatar";
 import { InviteDialog } from "./invite-dialog";
 import { ActivityPanel } from "./activity-panel";
+import { ChatPanel } from "./chat-panel";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -44,12 +46,24 @@ export function BoardHeader() {
   const onlineUsers = useKanbanStore((s) => s.onlineUsers)
   const typingUsers = useKanbanStore((s) => s.typingUsers)
   const connectionStatus = useKanbanStore((s) => s.connectionStatus)
+  const chatUnread = useKanbanStore((s) => s.chatUnread)
+  const setChatOpen = useKanbanStore((s) => s.setChatOpen)
   const filters = useKanbanStore((s) => s.filters)
   const setFilters = useKanbanStore((s) => s.setFilters)
   const { theme, setTheme } = useTheme()
 
   const [inviteOpen, setInviteOpen] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
+  const [chatOpenState, setChatOpenState] = useState(false)
+
+  const openChat = () => {
+    setChatOpenState(true)
+    setChatOpen(true)
+  }
+  const closeChat = () => {
+    setChatOpenState(false)
+    setChatOpen(false)
+  }
 
   if (!board || !user) return null
 
@@ -121,6 +135,19 @@ export function BoardHeader() {
           <Button size="sm" variant="outline" onClick={() => setInviteOpen(true)}>
             <UserPlus className="h-4 w-4" />
             <span className="hidden sm:inline ml-1">Invite</span>
+          </Button>
+
+          <Button size="sm" variant="outline" onClick={openChat} className="relative">
+            <MessagesSquare className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1">Chat</span>
+            {chatUnread > 0 && !chatOpenState && (
+              <span
+                className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                aria-label={`${chatUnread} unread messages`}
+              >
+                {chatUnread > 9 ? "9+" : chatUnread}
+              </span>
+            )}
           </Button>
 
           <Button size="sm" variant="outline" onClick={() => setActivityOpen(true)}>
@@ -226,6 +253,7 @@ export function BoardHeader() {
 
       <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <ActivityPanel open={activityOpen} onClose={() => setActivityOpen(false)} />
+      <ChatPanel open={chatOpenState} onClose={closeChat} />
     </div>
   )
 }

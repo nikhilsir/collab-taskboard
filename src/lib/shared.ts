@@ -1,4 +1,4 @@
-import type { Task, User, Comment, Activity } from '@prisma/client'
+import type { Task, User, Comment, Activity, ChatMessage } from '@prisma/client'
 
 /**
  * Task shape sent to the frontend (serialized dates as ISO strings)
@@ -19,6 +19,11 @@ export type CommentDTO = Omit<Comment, 'createdAt'> & {
 export type ActivityDTO = Omit<Activity, 'createdAt'> & {
   createdAt: string
   user: Pick<User, 'id' | 'name' | 'avatarColor'>
+}
+
+export type ChatMessageDTO = Omit<ChatMessage, 'createdAt'> & {
+  createdAt: string
+  author: Pick<User, 'id' | 'name' | 'avatarColor'>
 }
 
 export type BoardMember = Pick<User, 'id' | 'name' | 'email' | 'avatarColor'>

@@ -142,6 +142,18 @@ app.prepare().then(() => {
       })
     })
 
+    // Board chat typing indicator — relay to everyone else in the room
+    // (messages go through the Next.js API → in-process broadcast)
+    socket.on('chat:typing', (data) => {
+      const boardId = String(data?.boardId || '')
+      if (!boardId) return
+      socket.to(getRoom(boardId)).emit('chat:typing', {
+        userId: socketUser.userId,
+        name: socketUser.name,
+        at: Date.now(),
+      })
+    })
+
     socket.on('disconnect', () => {
       const boards = socketRooms.get(socket.id) || new Set()
       for (const boardId of boards) {

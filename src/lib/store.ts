@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { api, clearAuth, getStoredUser, getToken, AuthUser } from "@/lib/api";
-import type { TaskDTO, BoardDataDTO, BoardMember, ActivityDTO } from "@/lib/shared";
+import type { TaskDTO, BoardDataDTO, BoardMember, ActivityDTO, ChatMessageDTO } from "@/lib/shared";
 
 /**
  * Zustand store — single source of client state.
@@ -47,6 +47,12 @@ interface KanbanState {
   onlineUsers: { userId: string; name: string; avatarColor: string }[]
   typingUsers: Record<string, { name: string; at: number }>
 
+  // ---- board chat ----
+  chatMessages: ChatMessageDTO[]
+  chatOpen: boolean
+  chatUnread: number
+  chatTyping: Record<string, { name: string; at: number }>
+
   // ---- filters ----
   filters: Filters
 
@@ -72,6 +78,11 @@ interface KanbanState {
   markTyping: (userId: string, name: string) => void
   setFilters: (f: Partial<Filters>) => void
   markEventSeen: (eventId: string) => boolean
+  setChatOpen: (open: boolean) => void
+  setChatMessages: (messages: ChatMessageDTO[]) => void
+  applyChatMessage: (message: ChatMessageDTO, byUserId: string) => void
+  markChatTyping: (userId: string, name: string) => void
+  clearChat: () => void
 }
 
 export const useKanbanStore = create<KanbanState>((set, get) => ({
@@ -87,6 +98,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   connectionStatus: "connecting",
   onlineUsers: [],
   typingUsers: {},
+
+  chatMessages: [],
+  chatOpen: false,
+  chatUnread: 0,
+  chatTyping: {},
 
   filters: { search: "", priority: "ALL", assignee: "ALL", due: "ALL" },
 
@@ -126,7 +142,14 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   },
 
   setActiveBoard: (id) => {
-    set({ activeBoardId: id, board: id ? get().board?.id === id ? get().board : null : null, typingUsers: {} })
+    set({
+      activeBoardId: id,
+      board: id ? get().board?.id === id ? get().board : null : null,
+      typingUsers: {},
+      chatMessages: [],
+      chatUnread: 0,
+      chatTyping: {},
+    })
   },
 
   loadBoard: async (id) => {
@@ -223,6 +246,28 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   markTyping: (userId, name) => {
     set((s) => ({ typingUsers: { ...s.typingUsers, [userId]: { name, at: Date.now() } } }))
   },
+
+  // ---------- board chat ----------
+  setChatOpen: (open) => {
+    set({ chatOpen: open, ...(open ? { chatUnread: 0 } : {}) })
+  },
+
+  setChatMessages: (messages) => set({ chatMessages: messages }),
+
+  applyChatMessage: (message, byUserId) => {
+    const { chatMessages, chatOpen } = get()
+    if (chatMessages.some((m) => m.id === message.id)) return // dedup
+    set({
+      chatMessages: [...chatMessages, message],
+      chatUnread: chatOpen || byUserId === get().user?.id ? get().chatUnread : get().chatUnread + 1,
+    })
+  },
+
+  markChatTyping: (userId, name) => {
+    set((s) => ({ chatTyping: { ...s.chatTyping, [userId]: { name, at: Date.now() } } }))
+  },
+
+  clearChat: () => set({ chatMessages: [], chatUnread: 0, chatTyping: {} }),
 
   // ---------- filters ----------
   setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f } })),

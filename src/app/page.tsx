@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useKanbanStore } from "@/lib/store";
 import { connectSocket, getSocket, disconnectSocket } from "@/lib/kanban-socket";
 import { AuthUser, TaskDTO } from "@/lib/api";
+import type { ChatMessageDTO } from "@/lib/shared";
 import { AuthScreen } from "@/components/kanban/auth-screen";
 import { BoardSidebar } from "@/components/kanban/board-sidebar";
 import { BoardHeader } from "@/components/kanban/board-header";
@@ -47,6 +48,8 @@ export default function Page() {
   const markTyping = useKanbanStore((s) => s.markTyping)
   const refreshBoard = useKanbanStore((s) => s.refreshBoard)
   const setActiveBoard = useKanbanStore((s) => s.setActiveBoard)
+  const applyChatMessage = useKanbanStore((s) => s.applyChatMessage)
+  const markChatTyping = useKanbanStore((s) => s.markChatTyping)
 
   // modal state: edit task | create (status) | closed
   const [modalState, setModalState] = useState<{
@@ -138,6 +141,13 @@ export default function Page() {
     const onUserTyping = (data: { userId: string; name: string; at: number }) => {
       markTyping(data.userId, data.name)
     }
+    const onChatMessage = (data: { message: ChatMessageDTO; by: string }) => {
+      if (data.by === user.id) return // own message already applied via API response
+      applyChatMessage(data.message, data.by)
+    }
+    const onChatTyping = (data: { userId: string; name: string; at: number }) => {
+      markChatTyping(data.userId, data.name)
+    }
     const onAuthError = () => {
       toast.error("Session expired — please login again")
       logout()
@@ -154,6 +164,8 @@ export default function Page() {
     socket.on("member:joined", onMemberJoined)
     socket.on("presence:update", onPresenceUpdate)
     socket.on("user:typing", onUserTyping)
+    socket.on("chat:message", onChatMessage)
+    socket.on("chat:typing", onChatTyping)
     socket.on("auth:error", onAuthError)
 
     return () => {
@@ -168,9 +180,11 @@ export default function Page() {
       socket.off("member:joined", onMemberJoined)
       socket.off("presence:update", onPresenceUpdate)
       socket.off("user:typing", onUserTyping)
+      socket.off("chat:message", onChatMessage)
+      socket.off("chat:typing", onChatTyping)
       socket.off("auth:error", onAuthError)
     }
-  }, [user, applyTask, removeTask, applyComment, applyMemberJoined, setConnection, setOnlineUsers, markTyping, refreshBoard, logout])
+  }, [user, applyTask, removeTask, applyComment, applyMemberJoined, setConnection, setOnlineUsers, markTyping, refreshBoard, logout, applyChatMessage, markChatTyping])
 
   // ---------- room join/leave on board switch ----------
   useEffect(() => {
@@ -188,17 +202,20 @@ export default function Page() {
     }
   }, [user, activeBoardId])
 
-  // ---------- prune stale typing indicators ----------
+  // ---------- prune stale typing indicators (tasks + chat) ----------
   useEffect(() => {
     const timer = setInterval(() => {
-      const { typingUsers } = useKanbanStore.getState()
+      const { typingUsers, chatTyping } = useKanbanStore.getState()
       const now = Date.now()
       const stale = Object.entries(typingUsers).filter(([, t]) => now - t.at >= 4000)
-      if (stale.length > 0) {
+      const staleChat = Object.entries(chatTyping).filter(([, t]) => now - t.at >= 4000)
+      if (stale.length > 0 || staleChat.length > 0) {
         useKanbanStore.setState((s) => {
           const next = { ...s.typingUsers }
           for (const [uid] of stale) delete next[uid]
-          return { typingUsers: next }
+          const nextChat = { ...s.chatTyping }
+          for (const [uid] of staleChat) delete nextChat[uid]
+          return { typingUsers: next, chatTyping: nextChat }
         })
       }
     }, 1500)
