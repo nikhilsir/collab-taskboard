@@ -233,3 +233,60 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   httpServer.close(() => process.exit(0))
 })
+
+// ============================================================
+// DEV-SERVER WATCHDOG (self-healing)
+// This bun process belongs to the boot-time process tree, so it
+// keeps the Next.js dev server alive: every 10s, if port 3000 is
+// not responding, respawn `bun run dev` detached (its output
+// streams into the project's dev.log through the dev script's
+// tee). Guarded via globalThis so bun --hot reloads never
+// double-start the watchdog or the server (30s spawn cooldown).
+// ============================================================
+import { spawn } from 'node:child_process'
+import { openSync } from 'node:fs'
+
+const WATCHDOG_PROJECT_DIR = '/home/z/my-project'
+const WATCHDOG_LOG = '/home/z/my-project/dev.log'
+
+async function isDevServerUp(): Promise<boolean> {
+  try {
+    const res = await fetch('http://localhost:3000/', { signal: AbortSignal.timeout(4000) })
+    return res.status < 500
+  } catch {
+    return false
+  }
+}
+
+function respawnDevServer() {
+  const g = globalThis as Record<string, unknown>
+  const lastSpawnAt = (g.__devSpawnAt as number) || 0
+  if (Date.now() - lastSpawnAt < 30_000) return
+  g.__devSpawnAt = Date.now()
+  try {
+    const logFd = openSync(WATCHDOG_LOG, 'a')
+    const child = spawn(process.execPath, ['run', 'dev'], {
+      cwd: WATCHDOG_PROJECT_DIR,
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+      env: { ...process.env, FORCE_COLOR: '0' },
+    })
+    child.unref()
+    console.log(`[watchdog] Next dev server respawned (pid ${child.pid})`)
+  } catch (err) {
+    console.error('[watchdog] respawn failed:', err)
+  }
+}
+
+const hotGuard = globalThis as Record<string, unknown>
+if (!hotGuard.__devWatchdogArmed) {
+  hotGuard.__devWatchdogArmed = true
+  console.log('[watchdog] armed — keeping Next dev server alive (10s checks)')
+  setInterval(() => {
+    isDevServerUp()
+      .then((up) => {
+        if (!up) respawnDevServer()
+      })
+      .catch(() => {})
+  }, 10_000)
+}

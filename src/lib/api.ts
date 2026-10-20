@@ -73,3 +73,31 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   return json as T
 }
+
+/**
+ * Multipart upload variant of `api` — used for chat file attachments.
+ * Deliberately does NOT set Content-Type: the browser must generate the
+ * multipart boundary itself (manually setting it breaks the request).
+ */
+export async function apiForm<T>(path: string, form: FormData): Promise<T> {
+  const token = getToken()
+  const res = await fetch(path, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  })
+
+  if (res.status === 401 && typeof window !== "undefined") {
+    clearAuth()
+    window.location.reload()
+    throw new ApiError(401, "Session expired")
+  }
+
+  const json = await res.json().catch(() => ({}))
+
+  if (!res.ok) {
+    throw new ApiError(res.status, (json as { error?: string }).error || `Upload failed (${res.status})`)
+  }
+
+  return json as T
+}

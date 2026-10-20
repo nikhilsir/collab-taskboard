@@ -65,3 +65,5 @@ Caddyfile
 db/*.db
 db/*.db-journal
 agent-ctx/
+# chat file uploads (user content, not in git)
+/uploads

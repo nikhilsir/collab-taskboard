@@ -108,10 +108,18 @@ model Comment {
 // Every board has one group conversation; members added to
 // the board can discuss here. Persisted so history survives
 // reloads; delivered live via socket.io `chat:message` events.
+//
+// Attachments: file bytes live on DISK (uploads/chat/<messageId>),
+// DB stores only metadata (name/size/type/url) — keeps the
+// database small and mirrors the S3-style storage pattern.
 // ============================================
 model ChatMessage {
   id        String   @id @default(cuid())
   content   String
+  fileUrl   String?  // /api/attachments/<messageId> — membership-checked download
+  fileName  String?  // original file name shown to users
+  fileSize  Int?     // bytes
+  fileType  String?  // MIME type
   boardId   String
   authorId  String
   createdAt DateTime @default(now())
