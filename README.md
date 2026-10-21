@@ -108,6 +108,45 @@ Browser (React UI, Zustand store, dnd-kit)
 
 ---
 
+## 🌍 Deploy to Render (live URL)
+
+Production runs as **one service** — `server.mjs` serves the Next.js app **and** Socket.io (path `/socket.io`) on the same port, so there are no CORS issues. Production uses **PostgreSQL** (Neon) instead of local SQLite.
+
+### 1. Create the database (Neon)
+1. Sign up at [neon.tech](https://neon.tech) → create a project → copy the connection string (`postgresql://…`).
+
+### 2. Create the Render service
+1. [render.com](https://render.com) → **New → Web Service** → connect this GitHub repo.
+2. Settings:
+
+| Setting | Value |
+|---|---|
+| Runtime | Node |
+| Build Command | `npm install && npm run db:gen:pg && npm run db:push:pg && npm run build` |
+| Start Command | `npm start` |
+| Health Check Path | `/` |
+
+3. Environment variables:
+
+| Key | Value |
+|---|---|
+| `DATABASE_URL` | your Neon `postgresql://…` string |
+| `JWT_SECRET` | any long random string |
+| `SOCKET_INTERNAL_SECRET` | `socket-internal-shared-secret-2026` |
+| `NODE_ENV` | `production` |
+
+The build command generates the Prisma client from `prisma/schema.postgres.prisma` and pushes the schema to Neon, so every deploy auto-syncs the database (including the `ChatMessage` table).
+
+> ⚠️ **Chat attachments note:** uploaded files are written to the service's local disk. Render's free tier has an ephemeral disk — files survive until the next deploy/restart. For permanent storage add a Render Persistent Disk or swap `uploads/chat` for S3/Cloudinary.
+
+### Local production check
+```bash
+npm run db:gen:pg   # generate client from the postgres schema
+npm run build && npm start
+```
+
+---
+
 ## 👤 Author
 
 Built for the APPSICA Machine Test — Question 3: Real-Time Collaborative Kanban Board.

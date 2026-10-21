@@ -280,13 +280,20 @@ function respawnDevServer() {
 
 const hotGuard = globalThis as Record<string, unknown>
 if (!hotGuard.__devWatchdogArmed) {
-  hotGuard.__devWatchdogArmed = true
-  console.log('[watchdog] armed — keeping Next dev server alive (10s checks)')
-  setInterval(() => {
-    isDevServerUp()
-      .then((up) => {
-        if (!up) respawnDevServer()
-      })
-      .catch(() => {})
-  }, 10_000)
+  // Sandbox-only safety net. Production (Render) runs server.mjs as a
+  // single process — never let the watchdog spawn a dev server there.
+  const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER
+  if (isProduction) {
+    console.log('[watchdog] skipped (production environment)')
+  } else {
+    hotGuard.__devWatchdogArmed = true
+    console.log('[watchdog] armed — keeping Next dev server alive (10s checks)')
+    setInterval(() => {
+      isDevServerUp()
+        .then((up) => {
+          if (!up) respawnDevServer()
+        })
+        .catch(() => {})
+    }, 10_000)
+  }
 }

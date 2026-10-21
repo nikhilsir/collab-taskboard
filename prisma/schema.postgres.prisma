@@ -29,6 +29,8 @@ model User {
   comments     Comment[]
   // Activities performed
   activities   Activity[]
+  // Chat messages sent on boards
+  chatMessages ChatMessage[]
 
   @@index([email])
 }
@@ -47,6 +49,7 @@ model Board {
   members User[] @relation("BoardMembers") // implicit many-to-many
   tasks   Task[]
   activities Activity[]
+  chatMessages ChatMessage[]
 
   @@index([createdById])
 }
@@ -115,6 +118,36 @@ model Activity {
 
   board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, createdAt])
+}
+
+// ============================================
+// CHAT MESSAGE — real-time board-level chat
+// Every board has one group conversation; members added to
+// the board can discuss here. Persisted so history survives
+// reloads; delivered live via socket.io `chat:message` events.
+//
+// Attachments: file bytes live on DISK (uploads/chat/<messageId>),
+// DB stores only metadata (name/size/type/url) — keeps the
+// database small and mirrors the S3-style storage pattern.
+// NOTE on Render: free-tier disks are ephemeral — uploaded files
+// survive until the next redeploy/restart. For permanence, add a
+// Render Persistent Disk or swap the path for S3/Cloudinary.
+// ============================================
+model ChatMessage {
+  id        String   @id @default(cuid())
+  content   String
+  fileUrl   String?  // /api/attachments/<messageId> — membership-checked download
+  fileName  String?  // original file name shown to users
+  fileSize  Int?     // bytes
+  fileType  String?  // MIME type
+  boardId   String
+  authorId  String
+  createdAt DateTime @default(now())
+
+  board  Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  author User  @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([boardId, createdAt])
 }
